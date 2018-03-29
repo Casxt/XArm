@@ -6,8 +6,9 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
 
-#define Loop_us 5
+
 #define LoopMs 5
+#define Loop_us LoopMs*1000
 #define CommandBufLen 256
 
 //#define APMode
@@ -76,14 +77,15 @@ unsigned int comLen = 0;
 //Are we currently connected?
 bool connected = false;
 
-hw_timer_t * timer0 = NULL, * timer1 = NULL;
-bool timer0Fired = false, timer1Fired = false;
-unsigned int timer0Count = 0, timer1Count = 0, boardCastCount = 0;
-portMUX_TYPE timer0Mux = portMUX_INITIALIZER_UNLOCKED;
+bool AcceptCmdFired = false, boardCastAllServoPosFired = false, boardCastAllServoInfoFired = false,
+refreshServoPosFired = false, refreshServoInfoFired = false, MoveServoFired = false;
+
+
+unsigned int LoopCount = 0, boardCastCount = 0;
 
 unsigned long int test = 0, usedTime = 0, globalTimeStemp = 0;
 
-unsigned char ServoGetPosCount = 0, ServoGetExtraInfoCount = 0, ServoGetExtraInfoServoCount = 0;
+unsigned char ServoGetPosCount = 0, ServoGetExtraInfoCount = 0;
 
 void setup(){
     Serial.begin(115200);
@@ -102,95 +104,112 @@ void setup(){
 
 void loop(){
     globalTimeStemp = micros();
-    timer0Count++; 
+    LoopCount++;
+
+    //Trigger
+    if(!(LoopCount%(35/LoopMs))){
+        AcceptCmdFired = true;
+    }
+    if(!(LoopCount%(500/LoopMs))){
+        boardCastAllServoInfoFired = true;
+    }
+    if(!(LoopCount%(100/LoopMs))){
+        boardCastAllServoPosFired = true;
+    }
+    if(!(LoopCount%(30/LoopMs))){
+        refreshServoPosFired = true;
+    }
+    if(!(LoopCount%(200/LoopMs))){
+        refreshServoInfoFired = true;
+    }
+    if(!(LoopCount%(5/LoopMs))){
+        MoveServoFired = true;
+    }
+
+    //runner
     if (connected){
-        if(!(timer0Count%(35/LoopMs))){
-            boardcast.parsePacket();
-            if(boardcast.available()){
-                recvCommandLen = boardcast.read(command,CommandBufLen-1);
-                if (recvCommandLen > 7 && command[0] == 0xff && command[1] == 0x00 && command[2] == 0xff){
-                    
-                    memcpy(&comTimeStemp,&command[3],4);
-                    comMode = command[7];
-                    memcpy(&comLen,&command[8],2);
-                    
-                    if(globalTimeStemp-comTimeStemp < 1230000){
-#ifdef UserDebug
-                        Serial.print("comLen:");
-                        Serial.print(recvCommandLen);
-                        Serial.print(" comMode:");
-                        Serial.println(comMode);
-#endif                  
-                        switch(comMode){   
-                            case SetAllServoPos: 
-                                setAllServoPos(&command[10]);
-                                break;
-                                
-                            case SetAllServoSpeed: 
-                                setAllServoSpeed(&command[10]);
-                                break;
-                                
-                            case SetAllServoPosSpeed:
-                                setAllServoPosSpeed(&command[10]);
-                                break;
-                                
-                            case UnloadAllServo:
-                                unloadAllServo(&command[10]);
-                                break;
-                                
-                            case LoadAllServo:
-                                loadAllServo(&command[10]);
-                                break;
-                        }
-                    }else{
-#ifdef UserDebug      
-                        Serial.print("Timeout Command: Local:");
-                        Serial.print(globalTimeStemp);
-                        Serial.print(" Com:");
-                        Serial.print(comTimeStemp);
-                        Serial.print(" Delay:");
-                        Serial.println(globalTimeStemp - comTimeStemp);
-#endif
-                    }
-                }
-#ifdef UserDebug
-                else{
-                    Serial.print("failedData:");
-                    Serial.println((char *)command);
-                }
-#endif
-            }
-        }else if(!(timer0Count%(150/LoopMs))){
-#ifdef UserDebug
-            Serial.println("Send boardCastAllServo");
-#endif
-            if (boardCastCount++%19){//!=0
-                    boardCastAllServoPos();
-                }else{//==0
-                    boardCastAllServoInfo();
-                }
-        }  
+        if(AcceptCmdFired){
+            AcceptCmd();
+            AcceptCmdFired = false;
+        }
+        else if(boardCastAllServoPosFired){
+            boardCastAllServoPos();
+            boardCastAllServoPosFired = false;
+        }
+        else if(boardCastAllServoInfoFired){
+            boardCastAllServoInfo();
+            boardCastAllServoInfoFired = false;
+        }else if(refreshServoPosFired){
+            refreshServoPos();
+            refreshServoPosFired = false;
+        }else if(refreshServoInfoFired){
+            refreshServoInfo();
+            refreshServoInfoFired = false;
+        }else if(MoveServoFired){
+            MoveServo();
+            MoveServoFired = false;
+        }
+        
+    }else{
+        //rest
+        for(int i=0;i<ServoNum;i++){
+            servoState[i].powerOn = false;
+            LobotSerialServoUnload(Serial1, servoState[i].id);
+        }
     }
-    
-    //Move The Servo
-    if(servoState[timer0Count%6].powerOn && servoState[timer0Count%6].needMove){
-        LobotSerialServoMove(Serial1, servoState[timer0Count%6].id, servoState[timer0Count%6].expectPos, servoState[timer0Count%6].getMoveTime());
-        servoState[timer0Count%6].needMove = false;
-        servoState[timer0Count%6].powerOn = true;
-    }
-    
-    if(!(timer0Count%(30/LoopMs))){
-        refreshServoPos();
-    }
-    else if(!(timer0Count%(199/LoopMs))){
-        refreshServoInfo();
-    }
-#ifdef UserDebug
-    Serial.print("usedTime:");
-    Serial.println((micros()-globalTimeStemp));
-#endif
+
+    //rest
     delayMicroseconds(Loop_us-(micros()-globalTimeStemp)%Loop_us);
 }
+
+void MoveServo(){
+    //Move The Servo
+    if(servoState[LoopCount%6].powerOn && servoState[LoopCount%6].needMove){
+        LobotSerialServoMove(Serial1, servoState[LoopCount%6].id, servoState[LoopCount%6].expectPos, servoState[LoopCount%6].getMoveTime());
+        servoState[LoopCount%6].needMove = false;
+        servoState[LoopCount%6].powerOn = true;
+    }
+}
+
+void AcceptCmd(){
+    boardcast.parsePacket();
+    if(boardcast.available()){
+        recvCommandLen = boardcast.read(command,CommandBufLen-1);
+        if (recvCommandLen > 7 && command[0] == 0xff && command[1] == 0x00 && command[2] == 0xff){
+            
+            memcpy(&comTimeStemp,&command[3],4);
+            comMode = command[7];
+            memcpy(&comLen,&command[8],2);
+            
+            if(globalTimeStemp-comTimeStemp < 1230000){
+
+                switch(comMode){   
+                    case SetAllServoPos: 
+                        setAllServoPos(&command[10]);
+                        break;
+                        
+                    case SetAllServoSpeed: 
+                        setAllServoSpeed(&command[10]);
+                        break;
+                        
+                    case SetAllServoPosSpeed:
+                        setAllServoPosSpeed(&command[10]);
+                        break;
+                        
+                    case UnloadAllServo:
+                        unloadAllServo(&command[10]);
+                        break;
+                        
+                    case LoadAllServo:
+                        loadAllServo(&command[10]);
+                        break;
+                }
+            }
+        }
+    }
+}
+
+
 void correctServoPos(int pos[]){
     if(pos[0] > 500){
         pos[0] = 500;
@@ -231,43 +250,21 @@ void refreshServoInfo(){
             if(vin > 0){
                 servoState[(ServoGetExtraInfoCount/2)%6].vin = vin;
             }
-#ifdef UserDebug
-            else{
-                Serial.print("Error vin:");
-                Serial.print(vin);
-                }
-#endif 
             break;
         case 1:
             temp = LobotSerialServoReadTemp(Serial1, servoState[(ServoGetExtraInfoCount/2)%6].id);
             if(temp > 0){
                 servoState[(ServoGetExtraInfoCount/2)%6].temp = temp;
             }
-#ifdef UserDebug
-            else{
-                Serial.print("Error temp:");
-                Serial.print(temp);
-                }
-#endif 
     }
     ServoGetExtraInfoCount++;
 }
 
 void refreshServoPos(){
-#ifdef UserDebug
-    Serial.println("refreshAllServoPos");
-#endif   
     int pos = 0;
     pos = LobotSerialServoReadPosition(Serial1, servoState[ServoGetPosCount%6].id);
     if (pos > 0){
         servoState[ServoGetPosCount%6].pos = pos;
-#ifdef UserDebug
-        Serial.print("Error after:");
-        Serial.println(test);
-        test = 0;
-#endif  
-    }else{
-        test++;
     }
     ServoGetPosCount++;
 }
@@ -289,10 +286,7 @@ void boardCastAllServoInfo(){
     boardcast.endPacket();
 }
 
-void boardCastAllServoPos(){
-#ifdef UserDebug
-    Serial.println("boardCastAllServoPos");
-#endif   
+void boardCastAllServoPos(){  
     boardcast.beginPacket(boardcastAddr,boardcastPort);
     boardcast.write((const unsigned char *)Header,3);
     boardcast.write((const unsigned char *)&globalTimeStemp,4);
@@ -312,26 +306,24 @@ void setAllServoPos(const unsigned char Data[]){
     for(int i=0;i<ServoNum;i++){
         if(servoState[i].id == Data[i*3]){
             memcpy(&(pos[i]), &Data[i*3+1], 2);
-#ifdef UserDebug
-            Serial.print("Set Pos:");
-            Serial.println(pos[i]);
-#endif
-            //if(pos[i] > 1000 || pos[i] < 0){
-            //    trueData = false;
-            //}
+            if(pos[i] > 1000 || pos[i] < 0){
+                //trueData = false;
+                return;
+            }
         }else{
-            Serial.print("Worng ID:");
-            Serial.println(Data[i*3]);
-            trueData = false;
+            //Serial.print("Worng ID:");
+            //Serial.println(Data[i*3]);
+            //trueData = false;
+            return;
         }
     }
-    if(trueData == true){
+    //if(trueData == true){
         correctServoPos(pos);
         for(int i=0;i<ServoNum;i++){
             servoState[i].expectPos = pos[i];
             servoState[i].needMove = true;
         }
-    }
+    //}
 }
 
 void setAllServoSpeed(const unsigned char Data[]){
@@ -341,19 +333,21 @@ void setAllServoSpeed(const unsigned char Data[]){
         if(servoState[i].id == Data[i*3]){
             memcpy(&(speed[i]), &Data[i*3+1], 2);
             if(speed[i] < 0){
-                trueData = false;
+                //trueData = false;
+                return;
             }
         }else{
-            Serial.print("Worng ID:");
-            Serial.println(Data[i*3]);
-            trueData = false;
+            //Serial.print("Worng ID:");
+            //Serial.println(Data[i*3]);
+            //trueData = false;
+            return;
         }
     }
-    if(trueData == true){
+    //if(trueData == true){
         for(int i=0;i<ServoNum;i++){
             servoState[i].msPer128Pos = speed[i];
         }
-    }
+    //}
 }
 
 void setAllServoPosSpeed(const unsigned char Data[]){
@@ -363,69 +357,56 @@ void setAllServoPosSpeed(const unsigned char Data[]){
         if(servoState[i].id == Data[i*5]){
             memcpy(&(pos[i]), &Data[i*5+1], 2);//expectPos msPer128Pos
             memcpy(&(speed[i]), &Data[i*5+3], 2);
-#ifdef UserDebug
-            Serial.print("expectPos");
-            Serial.println(servoState[i].expectPos);
-#endif
             if(pos[i] > 1000 || pos[i] < 0 || speed[i] < 0){
-                trueData = false;
+                //trueData = false;
+                return;
             }
         }else{
-            Serial.print("Worng ID:");
-            Serial.println(Data[i*5]);
-            trueData = false;
+            //Serial.print("Worng ID:");
+            //Serial.println(Data[i*5]);
+            //trueData = false;
+            return;
         }
     }
-    if(trueData == true){
+    //if(trueData == true){
         correctServoPos(pos);
         for(int i=0;i<ServoNum;i++){
             servoState[i].expectPos = pos[i];
             servoState[i].msPer128Pos = speed[i];
             servoState[i].needMove = true;
         }
-    }
+    //}
 }
 
 void unloadAllServo(const unsigned char Data[]){
     bool trueData = true;
     for(int i=0;i<ServoNum;i++){
-        if(servoState[i].id == Data[i]){
-#ifdef UserDebug
-            Serial.print("unloadAllServo");
-#endif
-        }else{
-            Serial.print("Worng ID:");
-            Serial.println(Data[i]);
-            trueData = false;
+        if(servoState[i].id != Data[i]){
+            //trueData = false;
+            return;
         }
     }
-    if(trueData == true){
+    //if(trueData == true){
         for(int i=0;i<ServoNum;i++){
             servoState[i].powerOn = false;
             LobotSerialServoUnload(Serial1, servoState[i].id);
         }
-    }
+    //}
 }
 
 void loadAllServo(const unsigned char Data[]){
     bool trueData = true;
     for(int i=0;i<ServoNum;i++){
-        if(servoState[i].id == Data[i]){
-#ifdef UserDebug
-            Serial.print("unloadAllServo");
-#endif
-        }else{
-            Serial.print("Worng ID:");
-            Serial.println(Data[i]);
-            trueData = false;
+        if(servoState[i].id != Data[i]){
+            return;
         }
     }
-    if(trueData == true){
+    //if(trueData == true){
         for(int i=0;i<ServoNum;i++){
             servoState[i].powerOn = true;
             LobotSerialServoLoad(Serial1, servoState[i].id);
         }
-    }
+    //}
 }
 
 void connectToWiFi(const char * ssid, const char * pwd){
