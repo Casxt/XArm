@@ -80,11 +80,11 @@ void loop(){
     globalTimeStemp = micros();
     LoopCount++; 
     //trigger
-    if(!(LoopCount%(50/LoopMs))){
+    if(!(LoopCount%(25/LoopMs))){
         ReadDataFired = true;
         
     }
-    if(!(LoopCount%100/LoopMs)){
+    if(!(LoopCount%(50/LoopMs))){
         SendDataFired = true;
     }
 
@@ -93,8 +93,7 @@ void loop(){
         if(ReadDataFired){
             ReadData();
             ReadDataFired = false;
-        }
-        if(SendDataFired){
+        }else if(SendDataFired){
             BoardcastData();
             SendDataFired = false;
         }
@@ -121,8 +120,6 @@ void ReadData(){
                 memcpy(AngleBuff, Buff, BuffLen);
             }
         }else{
-
-            Serial.println("correct");
 
             while(Serial1.peek()!=0x55){
                 Serial1.read();
