@@ -36,6 +36,7 @@ const unsigned char SensorAxis6Cmd[] = {0xff,0xaa,0x24,0x01,0x00};
 const unsigned char SensorBoudRateCmd[] = {0xff,0xaa,0x04,0x05,0x00};
 const unsigned char Sensor20HzCmd[] = {0xff,0xaa,0x03,0x07,0x00};
 const unsigned char SensorD2AinCmd[] = {0xff,0xaa,0x10,0x00,0x00};
+//const unsigned char SensorD0AinCmd[] = {0xff,0xaa,0x0e,0x00,0x00};
 WiFiUDP boardcast;//, controlMsg
 const char * boardcastAddr = "255.255.255.255";
 const int boardcastPort = 3332;
@@ -43,7 +44,7 @@ const int boardcastPort = 3332;
 //Are we currently connected?
 bool connected = false;
 
-unsigned int timer0Count = 0, sendCount = 0;
+unsigned int LoopCount = 0, sendCount = 0;
 
 unsigned long int usedTime = 0, globalTimeStemp = 0;
 
@@ -53,8 +54,10 @@ unsigned char *PortBuff = Buff, *AngleBuff = Buff + BuffLen;
 void WiFiEvent(WiFiEvent_t event);
 void connectToWiFi(const char * ssid, const char * pwd);
 char CheckSum=0;
-void setup(){
 
+bool SendDataFired = false, ReadDataFired = false;
+
+void setup(){
     Serial.begin(115200);
 
     Serial1.begin(9600);
@@ -75,56 +78,66 @@ void setup(){
 
 void loop(){
     globalTimeStemp = micros();
-    timer0Count++; 
+    LoopCount++; 
+    //trigger
+    if(!(LoopCount%(50/LoopMs))){
+        ReadDataFired = true;
+        
+    }
+    if(!(LoopCount%100/LoopMs)){
+        SendDataFired = true;
+    }
+
+    //runner
     if (connected){
-        if(!(timer0Count%5) && Serial1.available()){
-
-                for(char i =0;i < BuffLen;i++){
-                    Buff[i] = Serial1.read();
-                    delayMicroseconds(150);
-                }
-                
-                CheckSum = 0;
-                for(char i =0;i < BuffLen-1;i++){
-                    CheckSum += Buff[i];
-                }
-                if(CheckSum == Buff[BuffLen-1] && Buff[0]==0x55 && (Buff[1]==0x55 ||  Buff[1]==0x53)){
-                    if(Buff[1]==0x55){
-                        memcpy(PortBuff, Buff, BuffLen);
-                    }else if(Buff[1]==0x53){
-                        memcpy(AngleBuff, Buff, BuffLen);
-                    }
-                }else{
-
-                    Serial.println("correct");
-      
-                    while(Serial1.peek()!=0x55){
-                        Serial1.read();
-                        delayMicroseconds(100);
-                    }
-                }
-#ifdef UserDebug
-                Serial.print("Data:");
-                for(char i =0;i < BuffLen-1;i++){
-                    Serial.print(Buff[i], HEX);
-                }
-                Serial.println(Buff[BuffLen-1], HEX);
-#endif          
+        if(ReadDataFired){
+            ReadData();
+            ReadDataFired = false;
         }
-        
-        
-        if(!(timer0Count%16)){
-                boardcast.beginPacket(boardcastAddr,boardcastPort);
-                boardcast.write(Buff,SendBuffLen);
-                boardcast.endPacket();
+        if(SendDataFired){
+            BoardcastData();
+            SendDataFired = false;
         }
     }
-#ifdef UserDebug
-    //Serial.print("usedTime:");
-    //Serial.println((micros()-globalTimeStemp));
-#endif
+
     delayMicroseconds(Loopu_us-(micros()-globalTimeStemp)%Loopu_us);
 }
+
+void ReadData(){
+    if(Serial1.available()){
+        for(char i =0;i < BuffLen;i++){
+            Buff[i] = Serial1.read();
+            delayMicroseconds(50);
+        }
+        
+        CheckSum = 0;
+        for(char i =0;i < BuffLen-1;i++){
+            CheckSum += Buff[i];
+        }
+        if(CheckSum == Buff[BuffLen-1] && Buff[0]==0x55 && (Buff[1]==0x55 ||  Buff[1]==0x53)){
+            if(Buff[1]==0x55){
+                memcpy(PortBuff, Buff, BuffLen);
+            }else if(Buff[1]==0x53){
+                memcpy(AngleBuff, Buff, BuffLen);
+            }
+        }else{
+
+            Serial.println("correct");
+
+            while(Serial1.peek()!=0x55){
+                Serial1.read();
+                delayMicroseconds(50);
+            }
+        }
+    }
+}
+
+void BoardcastData(){
+    boardcast.beginPacket(boardcastAddr,boardcastPort);
+    boardcast.write(Buff,SendBuffLen);
+    boardcast.endPacket();
+}
+
 
 void connectToWiFi(const char * ssid, const char * pwd){
 #ifdef APMode

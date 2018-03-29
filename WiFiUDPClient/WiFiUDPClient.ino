@@ -95,11 +95,11 @@ void setup(){
         connectToWiFi(networkName, networkPswd);
         delay(10000);
     }
-    
     for(int i=0;i<ServoNum;i++){
         servoState[i].id = i+1;
         servoState[i].msPer128Pos = 5*128;
     }
+    
 }
 
 void loop(){
@@ -107,7 +107,7 @@ void loop(){
     LoopCount++;
 
     //Trigger
-    if(!(LoopCount%(35/LoopMs))){
+    if(!(LoopCount%(50/LoopMs))){
         AcceptCmdFired = true;
     }
     if(!(LoopCount%(500/LoopMs))){
@@ -167,7 +167,7 @@ void MoveServo(){
     if(servoState[LoopCount%6].powerOn && servoState[LoopCount%6].needMove){
         LobotSerialServoMove(Serial1, servoState[LoopCount%6].id, servoState[LoopCount%6].expectPos, servoState[LoopCount%6].getMoveTime());
         servoState[LoopCount%6].needMove = false;
-        servoState[LoopCount%6].powerOn = true;
+        //servoState[LoopCount%6].powerOn = true;
     }
 }
 
@@ -323,6 +323,7 @@ void setAllServoPos(const unsigned char Data[]){
             servoState[i].expectPos = pos[i];
             servoState[i].needMove = true;
         }
+        //servoState[0].expectPos = 500;
     //}
 }
 

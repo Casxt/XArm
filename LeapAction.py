@@ -55,24 +55,24 @@ class SampleListener(Leap.Listener):
         b=100
         c=-30
 
-        x = x*3/4                       #左右归一化
+        x = x*3/5                       #左右归一化
         y = y                           #高低归一化
-        z = -z*3/4                      #前后归一化
+        z = -z*3/5                      #前后归一化
         if (z<-30):
             z=-30
 
         x1 = math.sqrt((z-c)**2+x**2)   #计算俯视平面投影
         h=y-b                           #搬移y轴（高低）
-        AC=math.sqrt((h-120)**2+x1**2)   #3号舵机与5号舵机距离
+        AC=math.sqrt((h-140)**2+x1**2)   #3号舵机与5号舵机距离
         #print("x1",x1,"h",h,"AC",AC)
-        if x1**2+(h-120)**2>= 40000:
+        if x1**2+(h-140)**2>= 40000:
             beta=0
-            alfa=math.pi/2-math.atan((h-120)/x1)
+            alfa=math.pi/2-math.atan((h-140)/x1)
 
         else:
             
             beta=2*math.acos(AC/200)
-            alfa=math.pi/2-math.atan((h-120)/x1)-math.acos(AC/200)
+            alfa=math.pi/2-math.atan((h-140)/x1)-math.acos(AC/200)
             
         gama=-math.atan(x*16/9/(z+70))/2                                 #存疑
         alfa_d=alfa*180/math.pi
@@ -81,8 +81,8 @@ class SampleListener(Leap.Listener):
         #print(alfa_d,beta_d,gama_d)
         s4 = round(beta*750/math.pi)+100
         s5 = round(alfa*750/math.pi)+500
-        #s6 = round(gama*750/math.pi)+500
-        s6 = round(-x*1+500)                                         #s6采用什么方式呢
+        s6 = round(gama*750/math.pi)+500
+        #s6 = round(-x*1+500)                                         #s6采用什么方式呢
         if (s6 > 1000):
             s6 = 1000
         elif s6<0:
@@ -243,7 +243,7 @@ class SampleListener(Leap.Listener):
         newData = [a1,a2,a3,a4,a5,a6]
         lastData = self.dataQue[0]
         for i in range(0,6):
-            newData[i] = int(0.5*newData[i] + 0.20*self.dataQue[0][i] + 0.10*self.dataQue[1][i]
+            newData[i] = int(0.4*newData[i] + 0.25*self.dataQue[0][i] + 0.15*self.dataQue[1][i]
                                             + 0.10*self.dataQue[2][i] + 0.05*self.dataQue[3][i]
                                             + 0.05*self.dataQue[4][i])
                 

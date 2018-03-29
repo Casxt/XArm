@@ -38,7 +38,14 @@ class Application(Frame):
             f.temp.grid(row=5,column=1)
             f.grid(row=0,column=i)
             self.Frames.append(f)
-            
+        
+        f = Frame(height = 400,width = 400, borderwidth = 10, relief = "ridge")
+        #f = Frame(height = 400,width = 400, borderwidth = 10, relief = "ridge")
+        UnloadButton = Button(f, text='Unload', command=self.Xarm.PowerOff)
+        UnloadButton.grid(row=1,column=1)
+        LoadButton = Button(f, text='Load', command=self.Xarm.PowerOn)
+        LoadButton.grid(row=1,column=2)
+        f.grid(row=1)
     def update(self):
         for i in range(0,6):
             f = self.Frames[i]
@@ -80,7 +87,7 @@ def DataMix(Arm, Listener, controller, HandSensor):
         #L = Listener.dataQue[0]
         if DataCheck(*L[2:5]) is True:
             Arm.SetAllPos(*L)
-        time.sleep(0.08)
+        time.sleep(0.06)
     controller.remove_listener(listener)
     
 Arm = XarmControl(broadcastPort = 3333, ControlPort = 3333)
@@ -93,6 +100,7 @@ Hand = HandSensor(Listener)
 Hand.start()
 
 DataMixThread = threading.Thread(target=DataMix,args=(Arm, Listener, controller, Hand))
+DataMixThread.setDaemon(True)
 DataMixThread.start()
 
 root = Tk()

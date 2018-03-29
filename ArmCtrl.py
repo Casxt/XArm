@@ -73,6 +73,7 @@ class XarmControl(object):
         
     def Start(self):
         self.FindServer(self.ip, self.broadcastPort)
+        self.ServoInfoThread.setDaemon(True)
         self.ServoInfoThread.start()
         
     def FindServer(self,ip='0.0.0.0',broadcastPort=3333):

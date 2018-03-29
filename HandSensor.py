@@ -70,4 +70,5 @@ class HandSensor(object):
         
     def start(self): 
         tb = threading.Thread(target=self.GetData)
+        tb.setDaemon(True)
         tb.start()  
