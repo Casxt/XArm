@@ -87,7 +87,7 @@ def DataMix(Arm, Listener, controller, HandSensor):
         #L = Listener.dataQue[0]
         if DataCheck(*L[2:5]) is True:
             Arm.SetAllPos(*L)
-        time.sleep(0.06)
+        time.sleep(0.05)
     controller.remove_listener(listener)
     
 Arm = XarmControl(broadcastPort = 3333, ControlPort = 3333)
