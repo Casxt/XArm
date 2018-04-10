@@ -48,7 +48,8 @@ class HandSensor(object):
                     #print(D0,D1,D2)
                     crawl = D2
                     #print("crawl",crawl)
-                    cita1= (crawl-800)*1.63+10    
+                    cita1= (crawl-800)*1.63+10
+                    #cita1= (crawl-1200)*1.5+10    
                     #print("cita1",cita1)
                     if(cita1<500 and cita1>10):
                         engine_1= cita1

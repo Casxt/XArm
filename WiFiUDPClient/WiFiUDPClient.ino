@@ -81,7 +81,7 @@ bool AcceptCmdFired = false, boardCastAllServoPosFired = false, boardCastAllServ
 refreshServoPosFired = false, refreshServoInfoFired = false, MoveServoFired = false;
 
 
-unsigned int LoopCount = 0, boardCastCount = 0;
+unsigned int LoopCount = 0, boardCastCount = 0,ServoMoveCount = 0;
 
 unsigned long int test = 0, usedTime = 0, globalTimeStemp = 0;
 
@@ -164,11 +164,11 @@ void loop(){
 
 void MoveServo(){
     //Move The Servo
-    if(servoState[LoopCount%6].powerOn && servoState[LoopCount%6].needMove){
-        LobotSerialServoMove(Serial1, servoState[LoopCount%6].id, servoState[LoopCount%6].expectPos, servoState[LoopCount%6].getMoveTime());
-        servoState[LoopCount%6].needMove = false;
-        //servoState[LoopCount%6].powerOn = true;
+    if(servoState[ServoMoveCount%6].powerOn && servoState[ServoMoveCount%6].needMove){
+        LobotSerialServoMove(Serial1, servoState[ServoMoveCount%6].id, servoState[ServoMoveCount%6].expectPos, servoState[ServoMoveCount%6].getMoveTime());
+        servoState[ServoMoveCount%6].needMove = false;
     }
+    ServoMoveCount += 1;
 }
 
 void AcceptCmd(){
